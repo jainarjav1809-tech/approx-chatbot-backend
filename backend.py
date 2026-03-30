@@ -15,32 +15,14 @@ except Exception as e:
     print("❌ Dataset load error:", e)
     df = pd.DataFrame()
 
-# -------- TRY LOADING RAG MODEL --------
-rag_enabled = False
-
-try:
-    from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-
-    questions = df["user_query"].astype(str).tolist()
-    embeddings = model.encode(questions)
-
-    rag_enabled = True
-    print("✅ RAG model loaded")
-
-except Exception as e:
-    print("❌ RAG failed, using fallback:", e)
-
 # -------- CLEAN TEXT --------
 def clean_text(text):
     text = text.lower()
-    text = re.sub(r'[^a-z0-9_ ]', '', text)
+    text = re.sub(r'[^a-z0-9_. ]', '', text)
     return text
 
-# -------- FALLBACK MATCHING --------
-def fallback_answer(user_query):
+# -------- MAIN MATCH FUNCTION --------
+def find_answer(user_query):
     user_query = clean_text(user_query)
 
     stopwords = {
@@ -62,25 +44,36 @@ def fallback_answer(user_query):
 
         score = 0
 
+        # ✅ exact phrase match (strong)
         if user_query in question:
-            score += 10
+            score += 15
 
+        # ✅ numeric match (VERY IMPORTANT)
+        numbers = ["0.1", "0.5", "1.0"]
+        for num in numbers:
+            if num in user_query and num in question:
+                score += 10
+
+        # ✅ keyword match
         for word in query_words:
             if word in question:
-                score += 2
+                score += 3
 
+        # ✅ feature match (COUNT, SUM, AVG, GROUP)
         for word in query_words:
             if word in feature:
-                score += 4
+                score += 5
 
+        # ✅ engine focus match (approx/exact)
         for word in query_words:
             if word in focus:
-                score += 1
+                score += 2
 
-        important = ["sum", "count", "avg", "group", "sample", "error", "unexpected"]
+        # ✅ boost important keywords
+        important = ["sum", "count", "avg", "group", "sample", "error", "unexpected", "time"]
         for word in important:
             if word in user_query and word in question:
-                score += 3
+                score += 4
 
         if score > best_score:
             best_score = score
@@ -89,26 +82,7 @@ def fallback_answer(user_query):
     if best_match:
         return best_match
 
-    return "I didn't understand. Try asking about SUM, COUNT, AVG, GROUP BY, SAMPLE."
-
-# -------- MAIN ANSWER FUNCTION --------
-def find_answer(user_query):
-    # Try RAG first
-    if rag_enabled:
-        try:
-            query_embedding = model.encode([user_query])
-            similarities = cosine_similarity(query_embedding, embeddings)[0]
-
-            best_idx = similarities.argmax()
-            best_score = similarities[best_idx]
-
-            if best_score > 0.3:
-                return str(df.iloc[best_idx]["notes"])
-        except Exception as e:
-            print("❌ RAG runtime error:", e)
-
-    # fallback
-    return fallback_answer(user_query)
+    return "I didn't understand. Try asking about SUM, COUNT, AVG, GROUP BY, SAMPLE_FRAC."
 
 # -------- API --------
 @app.route("/chat", methods=["POST"])
@@ -140,4 +114,5 @@ def home():
 # -------- RUN --------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Running on port {port}")
     app.run(host="0.0.0.0", port=port)

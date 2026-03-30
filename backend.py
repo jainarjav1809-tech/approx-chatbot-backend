@@ -10,21 +10,28 @@ CORS(app)
 try:
     df = pd.read_csv("approx_engine_chatbot_dataset.csv", encoding="utf-8")
     print("✅ Dataset loaded successfully")
-    print(df.head())
+    print("Columns:", df.columns.tolist())
 except Exception as e:
     print("❌ ERROR LOADING DATASET:", e)
     df = pd.DataFrame()
 
 # -------- FUNCTION --------
 def find_answer(user_query):
-    user_query = user_query.lower()
+    user_query = user_query.lower().strip()
+
+    best_match = None
 
     for _, row in df.iterrows():
         question = str(row.get("user_query", "")).lower()
-        answer = str(row.get("expected_output_type", ""))
+        answer = str(row.get("notes", ""))
 
+        # keyword matching
         if any(word in question for word in user_query.split()):
-            return answer
+            best_match = answer
+            break
+
+    if best_match:
+        return best_match
 
     return "I didn't understand. Try asking about sample, count, speed, or accuracy."
 
@@ -33,7 +40,14 @@ def find_answer(user_query):
 def chat():
     try:
         data = request.get_json()
+
+        if not data:
+            return jsonify({"reply": "No input provided"}), 400
+
         user_query = data.get("message", "")
+
+        if not user_query:
+            return jsonify({"reply": "Empty query"}), 400
 
         answer = find_answer(user_query)
 
@@ -42,6 +56,11 @@ def chat():
     except Exception as e:
         print("❌ ERROR:", e)
         return jsonify({"reply": "Server error occurred"}), 500
+
+# -------- HEALTH CHECK (optional but useful) --------
+@app.route("/", methods=["GET"])
+def home():
+    return "API is running 🚀"
 
 # -------- RUN --------
 if __name__ == "__main__":

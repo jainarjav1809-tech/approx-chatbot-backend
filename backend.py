@@ -9,7 +9,7 @@ CORS(app)
 # -------- LOAD DATASET --------
 try:
     df = pd.read_csv("approx_engine_chatbot_dataset.csv", encoding="utf-8")
-    print("✅ Dataset loaded")
+    print("✅ Dataset loaded successfully")
     print(df.head())
 except Exception as e:
     print("❌ ERROR LOADING DATASET:", e)
@@ -20,8 +20,8 @@ def find_answer(user_query):
     user_query = user_query.lower()
 
     for _, row in df.iterrows():
-        question = str(row.get("question", "")).lower()
-        answer = row.get("answer", "")
+        question = str(row.get("user_query", "")).lower()
+        answer = str(row.get("expected_output_type", ""))
 
         if any(word in question for word in user_query.split()):
             return answer
@@ -38,6 +38,7 @@ def chat():
         answer = find_answer(user_query)
 
         return jsonify({"reply": answer})
+
     except Exception as e:
         print("❌ ERROR:", e)
         return jsonify({"reply": "Server error occurred"}), 500
